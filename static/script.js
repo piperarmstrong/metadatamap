@@ -27,6 +27,12 @@ var app = new Vue({
     showModal: false,
     autocompleteInput: '',
     autocompleteResults: [],
+    userId: '',
+    inputId: '',
+    showAnswers: false,
+    showAnchorInfo: false,
+    canEditAnchors: false,
+    showTokens: false
     },
   components: {
   //  'modal': Modal,
@@ -34,7 +40,7 @@ var app = new Vue({
   mounted: function () {
     this.loading = true;
     this.getVocab();
-    this.sendUpdate();
+    //this.sendUpdate();
 
     // Event listener to close the modal on Esc
     document.addEventListener("keydown", (e) => {
@@ -65,6 +71,33 @@ var app = new Vue({
         console.log('error in /api/vocab')
       });
     },
+    getIdData: function(id){
+      if (id === ''){
+        alert('That user id was not found');
+        return;
+      }
+      axios.get('/api/checkuserid/'+id).then(response => {
+        this.checked = response.data.hasId;
+        if (response.data.hasId){
+          this.userId = id;
+          this.sendUpdate();
+        }
+        else{
+          alert('That user id was not found');
+        }
+      }).catch(error => {
+        console.log('error in /api/checkuserid')
+      });
+    },
+    getNewUser: function(){
+      axios.post('/api/adduser').then(response => {
+        this.userId = response.data.userId;
+        this.sendUpdate();
+      }).catch(error => {
+        console.log('error in /api/vocab');
+        console.log(error);
+      });
+    },
     sendUpdate: function(){
     // Data is expected to be sent to server in this form:
     // data = {anchor_tokens: [[token_str,..],...]
@@ -76,6 +109,7 @@ var app = new Vue({
         anchor_tokens: this.anchors.map(anchorObj => (anchorObj.anchorWords)),
         labeled_docs: this.labeledDocs.map(doc => ({doc_id: doc.docId,
                                                     user_label: doc.userLabel})),
+        user_id: this.userId,
       }).then(response => {
         console.log(response);
         this.updateData = response.data;
@@ -112,7 +146,6 @@ var app = new Vue({
       console.log('chooseColors');
       //var colorsList = ['#191919', '#FE8000','#191919', , '#FE8000','#8B0000', '#4C4CFF','#0000FF', '#228B22', '#4B0082', '#FFA500', '#008080', '#FF4500'];
       //Christmas
-      var colorsList = ['#bb2528', '#146b3a']
       //Halloween
       //colorsList = ['#191919', '#FE8000']
 
@@ -121,11 +154,22 @@ var app = new Vue({
       //   console.log(this.labels[i].label, colorsList[i%lenColors]);
       //   Vue.set(this.colors, this.labels[i].label, colorsList[i%lenColors]);
       // }
-      Vue.set(this.colors, 'negative', colorsList[0]);
-      console.log(this.colors)
-      Vue.set(this.colors, 'positive', colorsList[1]);
-      console.log(this.colors)
-      console.log(colorsList)
+      if (this.labels[0].label === 'negative' ||
+          this.labels[0].label === 'positive'){
+        var colorsList = ['#FE8000', '#14d63a']
+        Vue.set(this.colors, 'negative', colorsList[0]);
+        console.log(this.colors)
+        Vue.set(this.colors, 'positive', colorsList[1]);
+        console.log(this.colors)
+        console.log(colorsList)
+      } else {
+        var colorsList = ['#0015bc', '#e9141d']
+        Vue.set(this.colors, 'D', colorsList[0]);
+        console.log(this.colors)
+        Vue.set(this.colors, 'R', colorsList[1]);
+        console.log(this.colors)
+        console.log(colorsList)
+      }
     },
     colSize: function(label){
       var count = 0;
@@ -185,6 +229,13 @@ var app = new Vue({
       var indexTarget = arr.indexOf(item);
       arr.splice(indexItem,1);
       arr.splice(indexTarget,0,this.drag);
+
+      if (this.drag.hasOwnProperty('docId')){
+        this.unselectAllDocs();
+        this.selectDocument(this.drag);
+      }
+
+
       $('#' + id).removeClass('dragover');
       Vue.set(this.drag, 'dragging', false);
     },
@@ -224,6 +275,7 @@ var app = new Vue({
         this.unselectDocument(doc);
       }
       else{
+        this.unselectAllDocs();
         this.unselectDocument(this.selectedDoc)
         this.selectedDoc = doc;
         doc.selected = true;
@@ -234,6 +286,11 @@ var app = new Vue({
       $('#doc'+doc.docId).removeClass('selected');
       this.selectedDoc = {};
       doc.selected = false;
+    },
+    unselectAllDocs: function(){
+      for (var i=0; i<this.unlabeledDocs.length; i++){
+        this.unselectDocument(this.unlabeledDocs[i]);
+      }
     },
     selectAnchor: function(anchor){
       this.unselectDocument(this.selectedDoc);
@@ -266,6 +323,9 @@ var app = new Vue({
       if (!(this.drag.hasOwnProperty('docId'))){
         return;
       }
+
+      this.unselectAllDocs();
+
       var doc = this.drag;
       Vue.set(doc, 'userLabel', label.label);
       this.labeledDocs.push(doc);
@@ -314,6 +374,30 @@ var app = new Vue({
       }
       this.autocompleteResults = this.vocab.filter(word => {
         return word.toLowerCase().indexOf(input.toLowerCase()) > -1});
+    },
+    addWord: function(e, anchor){
+      var word = anchor.autocompleteInput.toLowerCase().trim();
+      console.log('attempt to add', word);
+      if (this.vocab.includes(word)){
+        anchor.anchorWords.push(word);
+        anchor.autocompleteInput = "";
+      }
+      else{
+        alert(word + ' is not in the vocabulary');
+      }
+    },
+    deleteWord: function(anchor, index){
+      console.log(index);
+      anchor.anchorWords.splice(index, 1);
+    },
+    addAnchor: function(){
+      var anchor = {anchorId: 'x',
+                    anchorWords: [],
+                    topicWords: []};
+      this.anchors.push(anchor);
+    },
+    deleteAnchor: function(anchorIndex){
+      this.anchors.splice(anchorIndex, 1);
     },
   }, //End methods
 });
